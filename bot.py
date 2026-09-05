@@ -64,21 +64,30 @@ async def process_download(client: Client, callback_query: CallbackQuery):
             'quiet': True,
         }
     else:
-        # [ফিক্স ১]: ভিডিও H264 এবং অডিও AAC ফরম্যাটে রিকোড + faststart যুক্ত করা
+        # পারফেক্ট কী-ফ্রেম এবং সার্বজনীন MP4 ফরম্যাট তৈরি
         ydl_opts = {
             'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
             'outtmpl': out_template,
             'merge_output_format': 'mp4',
+            'postprocessors': [{
+                'key': 'FFmpegVideoConvertor',
+                'preferedformat': 'mp4',
+            }],
             'postprocessor_args': {
-                'Merger': [
+                'VideoConvertor': [
                     '-c:v', 'libx264',
+                    '-preset', 'fast',
+                    '-crf', '23',
+                    '-g', '60',            # প্রতি ২ সেকেন্ড পর পর কী-ফ্রেম (স্কিপ করার সুবিধা)
+                    '-keyint_min', '60',
+                    '-sc_threshold', '0',
                     '-c:a', 'aac',
+                    '-b:a', '128k',
                     '-movflags', '+faststart'
                 ]
             },
             'quiet': True,
         }
-
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
