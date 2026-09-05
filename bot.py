@@ -18,12 +18,11 @@ app = Client(
     bot_token=BOT_TOKEN
 )
 
-# ইউজারের লিংক সাময়িকভাবে সেভ রাখার ডিকশনারি
 user_links = {}
 
 @app.on_message(filters.command("start") & filters.private)
 async def start_cmd(client: Client, message: Message):
-    await message.reply_text("হ্যালো! ভিডিও লিঙ্ক পাঠান। অডিও অথবা ম্যাক্স 720p ভিডিও (সর্বোচ্চ ২ জিবি) ডাউনলোড করতে পারবেন।")
+    await message.reply_text("হ্যালো! যেকোনো ভিডিও লিঙ্ক পাঠান। অডিও অথবা সর্বোচ্চ 720p ভিডিও ডাউনলোড করতে পারবেন।")
 
 @app.on_message(filters.text & filters.private & ~filters.command(["start"]))
 async def handle_link(client: Client, message: Message):
@@ -65,15 +64,18 @@ async def process_download(client: Client, callback_query: CallbackQuery):
             'quiet': True,
         }
     else:
-        # ভিডিও 720p এবং ফাস্ট-স্ট্রিমিং (faststart) অপ্টিমাইজেশন
+        # [ফিক্স ১]: ভিডিও H264 এবং অডিও AAC ফরম্যাটে রিকোড + faststart যুক্ত করা
         ydl_opts = {
             'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
             'outtmpl': out_template,
             'merge_output_format': 'mp4',
-            'postprocessor_args': [
-                # এই কমান্ডটি মেটাডাটা সামনে নিয়ে আসে এবং টেনে দেখা নিশ্চিত করে
-                '-movflags', '+faststart'
-            ],
+            'postprocessor_args': {
+                'Merger': [
+                    '-c:v', 'libx264',
+                    '-c:a', 'aac',
+                    '-movflags', '+faststart'
+                ]
+            },
             'quiet': True,
         }
 
@@ -82,8 +84,13 @@ async def process_download(client: Client, callback_query: CallbackQuery):
             info = ydl.extract_info(url, download=True)
             video_id = info.get('id')
             title = info.get('title', 'Media File')
+            
+            # [ফিক্স ২]: ভিডিওর দৈর্ঘ্য এবং রেজোলিউশন সংরক্ষণ
+            duration = int(info.get('duration') or 0)
+            width = int(info.get('width') or 0)
+            height = int(info.get('height') or 0)
 
-        # ফাইল খুঁজে বের করা
+        # ডাউনলোড করা ফাইলটি লোকেট করা
         files = glob.glob(f"downloads/{chat_id}_{video_id}.*")
         if not files:
             await status_msg.edit_text("ফাইল প্রসেস করা যায়নি।")
@@ -92,7 +99,6 @@ async def process_download(client: Client, callback_query: CallbackQuery):
         file_path = files[0]
         file_size_gb = os.path.getsize(file_path) / (1024 * 1024 * 1024)
 
-        # Pyrogram সর্বোচ্চ ২ জিবি হ্যান্ডেল করতে পারে
         if file_size_gb > 2.0:
             await status_msg.edit_text(f"ফাইলের আকার {file_size_gb:.2f} GB, যা টেলিগ্রামের ২ GB লিমিটের চেয়ে বেশি।")
         else:
@@ -105,15 +111,19 @@ async def process_download(client: Client, callback_query: CallbackQuery):
                     caption=title
                 )
             else:
+                # [ফিক্স ৩]: আপলোডের সময় duration, width ও height পাঠানো
                 await client.send_video(
                     chat_id=chat_id,
                     video=file_path,
                     caption=title,
+                    duration=duration,
+                    width=width,
+                    height=height,
                     supports_streaming=True
                 )
             await status_msg.delete()
 
-        # ডিস্ক খালি করতে ফাইল ডিলিট
+        # সার্ভার স্টোরেজ ক্লিনআপ
         if os.path.exists(file_path):
             os.remove(file_path)
 
