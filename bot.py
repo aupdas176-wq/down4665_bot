@@ -65,11 +65,15 @@ async def process_download(client: Client, callback_query: CallbackQuery):
             'quiet': True,
         }
     else:
-        # সর্বোচ্চ 720p এবং অডিও মার্জ
+        # ভিডিও 720p এবং ফাস্ট-স্ট্রিমিং (faststart) অপ্টিমাইজেশন
         ydl_opts = {
             'format': 'bestvideo[height<=720]+bestaudio/best[height<=720]/best',
             'outtmpl': out_template,
             'merge_output_format': 'mp4',
+            'postprocessor_args': [
+                # এই কমান্ডটি মেটাডাটা সামনে নিয়ে আসে এবং টেনে দেখা নিশ্চিত করে
+                '-movflags', '+faststart'
+            ],
             'quiet': True,
         }
 
